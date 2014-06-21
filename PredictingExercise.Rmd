@@ -1,0 +1,642 @@
+Predicting How Well Exercises are Done
+========================================================
+
+
+Many machine learning datasets attempt to predict what action is being performed by participants (Human Activity Recognition) through the use of devices like the Jawbone Up, Nike Fuelband, Fitbit, and even the ubiquitous smartphone. [1] A study by Velloso et al. asks the question of not whether we can predict which activity is being performed, but how well it is being done. [2] [3]
+
+This paper attempts to create a fully reproducible multi-class classification supervised machine learning algorithm that accurately predicts if an exercise is being performed correctly using data from the Vellesco et al study. 
+
+The original study took readings from several wearable devices containing sensors including belts, gloves, arm-bands, and dumbbells. Participants were instructed to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different ways. These are listed below.
+
+A: exactly according to the specification
+
+B: throwing the elbows to the front
+
+C: lifting the dumbbell only halfway
+
+D: lowering the dumbbell only halfway
+
+E: and throwing the hips to the front
+
+The exercises were performed by six male participants aged 20-28 years who had little weight lifting experience.
+
+The goal of this paper is to correctly predict which way (how well) the participant was performing the exercise based solely on the sensor readings.
+
+## Data Preparation
+
+The data were downloaded via links provided by the Practical Machine Learning course taught by Jeff Leek via the Coursera platform.[4] The data is also available from the original author's webpage. [3]
+
+Many entries in the summary statistics columns had #DIV/0! values. These were determined to be NA values trying to divide by 0 to get an average of a non-existant number. This is a typical string entry in Excel this is attempted. They are set to NA within the read.csv call.
+
+The data had one training set with 19,622 observations and 160 columns of variable measurements with the "classe" variable (dependent variable) provided, and one hold-out test of 20 observations to be predicted and submitted.  The building set 
+
+The training set was initially randomly split into a model building set (70%; 13,375 observations) and a hold-out validation set (30%; 5,887 observations). 
+
+The building set was further randomly split into a training set (70%; 9,615 observations) and a testing set (30%; 4,120 observations). 
+
+Timestamp variables were removed since exercises were done sequentially and these are 100% predictors on this training set (and the test set), but would not be accurate for OOB predictions if exercises are done in different orders or for different periods of time. Username was also excluded right away.
+
+Columns of variable with near zero variance were then removed as they had no predictive value without any variance.
+
+Columns with NA's had over 9000 NA's entries. These seemed to be summary statistics from the last num_ window chunks of time, signified by a "yes" from the new_ window column. These wouldn't be amenable to imputation (they are just derived from the preceding block of time). They are removed for this single-time-point prediction modeling.
+
+The remaining variable (excluding the classe variable) were then checked for multi-colinearity with correlations over an 80% threshold. The extraneous columns were then removed. 
+
+This brought the predictor variable count to 39, along with the classe variable.
+
+Box-Cox power transformations were then applied to stabilize variance. Data was also centered and scaled at this point.
+
+One set of data were saved at this point for later use in a random forest model with pre-Principal Component Analysis (PCA) data. The data were then processed through PCA for use in post-PCA model building.
+
+## Model building
+
+Four models in total were trained on the data. One random forest model (RF) was trained on the pre-PCA data, the other three were trained on the post-PCA data. They PCA models included RF with default settings, one RF model with 10-fold repeated cross-validation with 3 repetitions, and one gradient boosting machine (GBM) model.
+
+## Predicting
+
+Each of these models were trained on the training set and used to predict on the test set. The pre-PCA RF model showed 99% accuracy, both post-PCA RF models showed 96.9% accuracy, and the GBM model showed 81.6% accuracy.
+
+## More model building (blending)
+
+Probabilities for each models' predictions were then into a separate matrix, then combined into one data.frame along with the classe variable of the test set. This data.frame was used to blend all predictions into one predicting model for the validation set. 
+
+The random forest model was used to combine all predictions since it showed very high accuracy. A final blending model was trained on the test set probabilities predicting its test set classe variable. This model achieved 100% accuracy in predicting its values. 
+
+## Predicting Validation
+
+The validation set was then predicted **once** by each of the 4 training set models. These probabilities were combined into a data.frame and used to predict **once** by the blending model built on the test set. 
+
+### Out-of-bag Estimate.
+
+This resulted in 99.2% accuracy on the validation set with an out-of-bag estimate of error rate of **0.8%**. 
+This seemed highly accurate for a model built on blended predictions.
+
+## Final build/test
+
+The final model was then built and run once on the actual test set. The work flow was changed slightly since there was no validation set.
+
+The final model was created by the 4 models predicting the outcomes of the training set, then using those training set probabilities to train the blended model.
+
+The test set was predicted by each of those 4 training set models, then all the probabilities were run through that final training set blending model for the final prediction.
+
+## Final Prediction Accuracy
+All 20 unknown predictions were submitted and confirmed correct. 
+
+The out-of-bag estimate of 0.8% help up for predicting 20 cases. If we make 100's or 1000's of predictions, we can expect about 0.8% to be misclassified.
+
+With all predictions confirmed correct externally with a one-time submission, post mortem analysis could then be performed on each model to assess the how each model fared.
+
+## Post-mortem Analysis
+
+Interestingly, besides the blended model, only the **pre-PCA** random forest model correctly predicted all 20 unknown cases (100% accuracy.) Both PCA processed random forest models had trouble with question 3 (95% accuracy each), while the GBM model had trouble with multiple misses (75% accuracy.)
+
+
+## Final model performance 
+
+Performance on unknown 20 predictions.
+
+### RF default options on PCA processed data.
+
+Accuracy : 0.95 
+95% CI : (0.751, 0.999)
+
+### RF repeated cross-validation 10 folds, 3 repeats on PCA processed data.
+
+Accuracy : 0.95 
+95% CI : (0.751, 0.999)
+
+### RF default options on Box-Cox transformed, scaled, and centered data but no PCA transformation.
+
+Accuracy : 1
+
+95% CI : (0.832, 1)
+
+### GBM model on PCA processed data.
+
+Accuracy : 0.75
+
+95% CI : (0.509, 0.913)
+ 
+### Final blended model accuracy.
+
+Accuracy : 1
+
+95% CI : (0.832, 1)
+
+No. of variables tried at each split: 2
+
+OOB estimate of  error rate: 0%
+
+## Conclusion
+
+In this case, reducing the dataset to principal components negatively impacted prediction performance. Model blending turned out to be good for coming to an agreement between models on predicting all 20 test cases. 
+
+Random forest performed well in blending the models together as simple majority voting would have also chosen the wrong prediction for prediction #3 of 20. 
+
+I would love to try other blending techniques and incorporating more models on slightly more intractable problems as this one seems to be modeled quite well by default-setting random forest modeling once the data have been processed a little bit (but not too much!) 
+
+
+_Model plots and output are included in the source code but are not considered as a required part of this report write-up._
+__________________________________________________________________________________________________________________________
+### References
+
+[1] Davide Anguita, Alessandro Ghio, Luca Oneto, Xavier Parra and Jorge L. Reyes-Ortiz. Human Activity Recognition on Smartphones using a Multiclass Hardware-Friendly Support Vector Machine. International Workshop of Ambient Assisted Living (IWAAL 2012). Vitoria-Gasteiz, Spain. Dec 2012 https://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
+
+[2] Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+[3] http://groupware.les.inf.puc-rio.br/har
+
+[4] https://class.coursera.org/predmachlearn-002
+__________________________________________________________________________________________________________________________
+
+## Source Code
+
+```{r cache=TRUE}
+library(data.table)
+
+setwd("C:/Users/fch80_000/Dropbox/~Coursera/DataScienceSpec/Practical-Machine-Learning/Project")
+
+# Download data files if the required files do not exist in the current working directory
+if (! file.exists("pml-training.csv")) {
+    print("Downloading training set data file")
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-training.csv")
+}
+
+if (! file.exists("pml-testing.csv")) {
+  print("Downloading testing set data file")
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-testing.csv")
+}
+
+```
+
+Many entries in the summary statistics columns had #DIV/0! values. These were determined to be NA values trying to divide by 0 to get an average of a non-existant number. This is a typical string entry in Excel this is attempted. They are set to NA within the read.csv call.
+
+```{r cache=TRUE}
+
+train<-read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!"))
+test<- read.csv("pml-testing.csv", na.strings = c("NA", "#DIV/0!"))
+
+```
+
+
+```{r cache=TRUE}
+library(caTools)
+set.seed(808)
+inBuild<- sample.split(train$classe, SplitRatio = .70)
+
+validation<- train[!inBuild,]
+buildData<- train[inBuild,]
+
+set.seed(809)
+inTrain<- sample.split(buildData$classe, SplitRatio = .70)
+
+training<- buildData[inTrain,]
+testing<- buildData[!inTrain,]
+
+```
+
+
+
+```{r cache=TRUE}
+names(training)[1:7]
+
+##Remove timestamp variables since exercises were done sequentially and these are 100% predictors on this training set (and the test set..), but will not be accurate for OOB predictions if exercises are done in different orders or for different periods of time.
+reducedTraining<- subset(training, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window))
+reducedTesting<- subset(testing, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window))
+reducedValidation<- subset(validation, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window))
+```
+
+
+```{r cache=TRUE, message=FALSE}
+# Find variables with both zero variance ratios and zero variability. Dependent variable isnt removed since if it has near zero variability, it can be predicted without any modeling!
+library(caret)
+
+nzv <- nearZeroVar(reducedTraining)
+
+# Use training ZeroVariance info to remove those variables(columns) from both the training and testing datasets. Reduced to 120 variables + classe.
+filteredTraining<- reducedTraining[,-nzv] 
+filteredTesting<- reducedTesting[,-nzv] 
+filteredValidation<- reducedValidation[,-nzv] 
+```
+
+
+```{r cache=TRUE}
+## Columns with NA's have over 9000 NA's. These seem to be summary statistics from the last num_window chunks of time, signified by a "yes" from the new_window column. These wouldn't be amenable to imputation (they are just derived from the preceding block of time). They are removed for this single-time-point prediction modeling. 
+#summary(filteredTraining)
+#Not included since it is very verbose.
+
+```
+
+```{r  cache=TRUE}
+## This function will return the column indices which contain NA's.
+nacols <- function(df) {
+  colnames(df)[unlist(lapply(df, function(x) any(is.na(x))))]
+}
+
+#Indices are made from the training data and applied to the testing and validation data. 
+NAcols<-nacols(filteredTraining)
+
+# The NA columns are filtered out 
+filteredTraining<- filteredTraining[ , -which(names(filteredTraining) %in% NAcols)]
+filteredTesting<- filteredTesting[ , -which(names(filteredTesting) %in% NAcols)]
+filteredValidation<- filteredValidation[ , -which(names(filteredValidation) %in% NAcols)]
+
+
+```
+
+
+```{r cache=TRUE}
+## Find multicolinear variables. Use absolute values to find both highly positive and negative correlations. Remove the dependent classe varaible in the cor().
+M<- abs(cor(filteredTraining[,-53]))
+## All variables are correlated 100% with themselves. Set these to 0.
+diag(M)<- 0
+## Find all variables that over the threshold of 80%
+which(M > 0.8, arr.ind = TRUE)
+```
+
+
+```{r cache=TRUE}
+#Find correlated predictor variables correlated over |0.8| , and remove. Use same indices from train toward test/validation.
+descrCor <- cor(filteredTraining[,-53])
+highlyCorDescr <- findCorrelation(descrCor, cutoff = 0.8)
+
+
+filteredTraining <- filteredTraining[, -highlyCorDescr]
+filteredTesting <- filteredTesting[, -highlyCorDescr]
+filteredValidation <- filteredValidation[, -highlyCorDescr]
+
+## This reduces the predictor variables to 39.
+names(filteredTraining)[40]
+
+
+
+```
+
+
+```{r cache=TRUE}
+## Box-Cox power transformation is applied to stabilize variance.
+## 52 remaining predictor variables are centered and scaled. 
+## The operations are applied in this order: Box-Cox/Yeo-Johnson transformation, centering, scaling, range, imputation, PCA, ICA then spatial sign. 
+## There are no NA's to impute in this data set.
+preObj<- preProcess(filteredTraining[,-40] , method = c("BoxCox","center", "scale"))
+
+
+```
+
+
+```{r cache=TRUE}
+## predict test and training scaled and centered values with the same training set settings/object
+trainPred<- predict(preObj, filteredTraining[,-40])
+testPred<- predict(preObj, filteredTesting[,-40])
+validationPred<- predict(preObj, filteredValidation[,-40])
+
+#*#*#*#*#
+### A training/test/validation set from here will be called to a later random forest model. This will be to create one random forest model with pre-PCA data, and one with post-PCA data to blend together.
+#*#*#*#*#
+
+#Training set should be scaled to mean 0 and sd of 1, testing set should be somewhat close. summary output is verbose, but this is confirmed.
+
+#summary(trainPred)
+#summary(testPred)
+#summary(validationPred)
+```
+
+
+
+```{r cache=TRUE}
+## Apply PCA to the new scaled datasets. Caret had a wildly different result when adding this in the earlier call with Box-Cox, centering, and scaling, so this was separated.
+prComp<- preProcess(trainPred, method = "pca")
+predPCA<- predict(prComp, trainPred)
+
+#predict test PCA with training set values. DO NOT retrain using test variables.
+testPredPCA<- predict(prComp, testPred)
+validationPredPCA<- predict(prComp, validationPred)
+```
+
+
+```{r cache=TRUE}
+## Fit one RF model with the PCA transformed data.
+set.seed(808)
+rfFit<- train(filteredTraining$classe ~ ., method = "rf", data = predPCA, trControl = trainControl(savePredictions = TRUE))
+
+
+rfFitCF<- confusionMatrix(filteredTesting$classe, predict(rfFit, testPredPCA))
+rfFitCF
+
+ggplot(rfFit)
+
+rfFit$finalModel
+
+plot(rfFit$finalModel)
+```
+
+```{r cache=TRUE}
+## Fit one random forest model using repeated cross-validation 10 folds, repeated 3 times.
+set.seed(808)
+rfFit1<- train(filteredTraining$classe ~ .,
+               method = "rf",
+               data = predPCA,
+               trControl = trainControl(savePredictions = TRUE,
+                                        method = "repeatedcv",
+                                        number = 10,
+                                        repeats = 3,
+                                        allowParallel = TRUE))
+
+rfFitCF1<- confusionMatrix(filteredTesting$classe, predict(rfFit1, testPredPCA))
+rfFitCF1
+
+ggplot(rfFit1)
+
+rfFit1$finalModel
+
+plot(rfFit1$finalModel)
+
+```
+
+```{r cache=TRUE}
+## Fit one random forest model with training data before PCA transformation.
+set.seed(808)
+rfFitCFnoPCA<- train(filteredTraining$classe ~., 
+                     method = "rf",
+                     data = trainPred,
+                     trControl = trainControl(savePredictions = TRUE,
+                                              allowParallel = TRUE))
+
+ggplot(rfFitCFnoPCA)
+
+rfFitCFnoPCA$finalModel
+
+plot(rfFitCFnoPCA$finalModel)
+
+
+
+```
+
+```{r cache=TRUE}
+## Fit one gradient boosting machine (GBM) model with post-PCA data.
+set.seed(808)
+gbmFit1 <- train(filteredTraining$classe ~ ., data = predPCA,
+                 method = "gbm",
+                 verbose = FALSE,
+                 trControl = trainControl(savePredictions = TRUE))
+
+gbmFitCF<- confusionMatrix(filteredTesting$classe, predict(gbmFit1, testPredPCA))
+gbmFitCF
+
+ggplot(gbmFit1)
+
+gbmFit1$finalModel
+
+plot(gbmFit1$finalModel)
+```
+
+```{r cache=TRUE}
+## Predict all 4 training set models onto the test set data. We will save the probabilities for each classe from model into a separate matrix, then combine them all into one dataframe along with the classe variable of the test set. This data.frame will be used to blend them all into one predicting model for the validation set.
+pred1<- predict(rfFit, testPredPCA, type = "prob")
+pred2<- predict(rfFit1, testPredPCA, type = "prob")
+#This one uses pre-PCA data
+pred3<- predict(rfFitCFnoPCA, testPred, type = "prob")
+pred4<- predict(gbmFit1, testPredPCA, type = "prob")
+
+predDF<- data.frame(pred1, pred2, pred3, pred4, classe = filteredTesting$classe)
+table(predDF$classe)
+head(predDF)
+```
+
+```{r cache=TRUE}
+# Train one random forest model on all predicted probabilities to predict classe.
+set.seed(808)
+rfFitAll<- train(classe ~ ., method = "rf", data = predDF, trControl = trainControl(savePredictions = TRUE,
+                                                                                    allowParallel = TRUE))
+gbmFitCFAll<- confusionMatrix(predDF$classe, predict(rfFitAll, predDF))
+gbmFitCFAll
+```
+
+OOB estimate of error rate: 0.8% with the final blended model.
+
+```{r cache=TRUE}
+
+rfFitAll$finalModel
+
+################### Predict Validation ##########
+
+rfFitCFVal<- confusionMatrix(filteredValidation$classe, predict(rfFit, validationPredPCA))
+rfFitCFVal
+
+rfFitCFVal1<- confusionMatrix(filteredValidation$classe, predict(rfFit1, validationPredPCA))
+rfFitCFVal1
+
+#This one uses pre-PCA data.
+rfFitCFNOPCAVal1<- confusionMatrix(filteredValidation$classe, predict(rfFitCFnoPCA, validationPred))
+rfFitCFNOPCAVal1
+
+gbmFitCFVal<- confusionMatrix(filteredValidation$classe, predict(gbmFit1, validationPredPCA))
+gbmFitCFVal
+
+```
+
+```{r cache=TRUE}
+## Make a data.frame for the validation predictions.
+predVal1<- predict(rfFit, validationPredPCA, type = "prob")
+predVal2<- predict(rfFit1, validationPredPCA, type = "prob")
+#This one uses pre-PCA data.
+predVal3<- predict(rfFitCFnoPCA, validationPred, type = "prob")
+predVal4<- predict(gbmFit1, validationPredPCA, type = "prob")
+
+predDFVal<- data.frame(predVal1, predVal2, predVal3, predVal4, classe = filteredValidation$classe)
+
+
+FitCFAllVal<- confusionMatrix(predDFVal$classe, predict(rfFitAll, predDFVal))
+
+FitCFAllVal
+```
+
+99.2% accuracy on a one time run on the validation set with models built on the training set, then predicted out and a blended model built on those predictions on an independent test set.
+
+This seems highly accurate for a model built on blended predictions.
+
+Now, we will build the final model, and run it once on the actual test set. The work flow will be changed slightly since we don't have a test set and validation set. 
+
+The final model will be created by the 4 models predicting the outcomes of the training set, then using those training set probabilities to train the blended model. 
+
+The test set will be predicted by each of those 4 models, then all the probabilities will be run through that final model for the final prediction.
+
+```{r cache=TRUE}
+########################################################################################################
+##FINAL RUN
+######################
+
+
+
+trainingFINAL<-read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!"))
+testingFINAL<- read.csv("pml-testing.csv", na.strings = c("NA", "#DIV/0!"))
+
+
+reducedTrainingFINAL<- subset(trainingFINAL, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window))
+reducedTestingFINAL<- subset(testingFINAL, select = -c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window))
+
+nzv <- nearZeroVar(reducedTrainingFINAL)
+
+# Use training ZeroVariance info to remove those variables(columns) from both the training and testing datasets. Reduced to 120 variables + classe.
+filteredTrainingFINAL<- reducedTrainingFINAL[,-nzv] 
+filteredTestingFINAL<- reducedTestingFINAL[,-nzv] 
+```
+
+```{r cache=TRUE}
+nacols <- function(df) {
+  colnames(df)[unlist(lapply(df, function(x) any(is.na(x))))]
+}
+
+NAcols<-nacols(filteredTrainingFINAL)
+
+filteredTrainingFINAL<- filteredTrainingFINAL[ , -which(names(filteredTrainingFINAL) %in% NAcols)]
+filteredTestingFINAL<- filteredTestingFINAL[ , -which(names(filteredTestingFINAL) %in% NAcols)]
+
+names(filteredTrainingFINAL)[53]
+
+descrCorFINAL <- cor(filteredTrainingFINAL[,-53])
+highlyCorDescrFINAL <- findCorrelation(descrCorFINAL, cutoff = 0.8)
+
+filteredTrainingFINAL <- filteredTrainingFINAL[, -highlyCorDescrFINAL]
+filteredTestingFINAL <- filteredTestingFINAL[, -highlyCorDescrFINAL]
+
+# One less column was dropped when running on the full training set.
+names(filteredTrainingFINAL)[41]
+names(filteredTestingFINAL)[41]
+```
+
+```{r cache=TRUE}
+preObjFINAL<- preProcess(filteredTrainingFINAL[,-41] , method = c("BoxCox","center", "scale"))
+
+## predict test and training scaled and centered values with the same training set settings/object
+trainPredFINAL<- predict(preObjFINAL, filteredTrainingFINAL[,-41])
+testPredFINAL<- predict(preObjFINAL, filteredTestingFINAL[,-41])
+
+#*#*#*#*#
+### A training/test/validation set from here will be called to a later random forest model. This will be to create one random forest model with pre-PCA data, and one with post-PCA data to blend together.
+#*#*#*#*#
+
+
+```
+
+```{r cache=TRUE}
+prCompFINAL<- preProcess(trainPredFINAL, method = "pca")
+predPCAFINAL<- predict(prCompFINAL, trainPredFINAL)
+
+#predict test PCA with training set values. DO NOT retrain using test variables.
+testPredPCAFINAL<- predict(prCompFINAL, testPredFINAL)
+
+```
+
+```{r cache=TRUE}
+set.seed(808)
+rfFitFINAL<- train(filteredTrainingFINAL$classe ~ ., method = "rf", data = predPCAFINAL, trControl = trainControl(savePredictions = TRUE))
+
+```
+
+```{r cache=TRUE}
+set.seed(808)
+rfFitFINAL1<- train(filteredTrainingFINAL$classe ~ .,
+               method = "rf",
+               data = predPCAFINAL,
+               trControl = trainControl(savePredictions = TRUE,
+                                        method = "repeatedcv",
+                                        number = 10,
+                                        repeats = 3,
+                                        allowParallel = TRUE))
+```
+
+```{r cache=TRUE}
+################ No PCA Random Forest
+#Uses pre-PCA dataset
+set.seed(808)
+rfFitCFnoPCAFINAL<- train(filteredTrainingFINAL$classe ~., 
+                     method = "rf",
+                     data = trainPredFINAL,
+                     trControl = trainControl(savePredictions = TRUE,
+                                              allowParallel = TRUE))
+
+```
+
+```{r cache=TRUE}
+set.seed(808)
+gbmFitFINAL1 <- train(filteredTrainingFINAL$classe ~ ., data = predPCAFINAL,
+                 method = "gbm",
+                 verbose = FALSE,
+                 trControl = trainControl(savePredictions = TRUE))
+```
+
+```{r cache=TRUE}
+pred1FINAL<- predict(rfFitFINAL, predPCAFINAL, type = "prob")
+pred2FINAL<- predict(rfFitFINAL1, predPCAFINAL, type = "prob")
+#This uses pre-PCA data
+pred3FINAL<- predict(rfFitCFnoPCAFINAL, trainPredFINAL, type = "prob")
+pred4FINAL<- predict(gbmFitFINAL1, predPCAFINAL, type = "prob")
+
+
+predDFFINAL<- data.frame(pred1FINAL, pred2FINAL, pred3FINAL, pred4FINAL, classe = filteredTrainingFINAL$classe)
+
+```
+
+```{r cache=TRUE}
+set.seed(808)
+rfFitFINALAll<- train(classe ~ ., method = "rf", data = predDFFINAL, trControl = trainControl(savePredictions = TRUE,  
+                                                                                    allowParallel = TRUE))
+```
+
+```{r cache=TRUE}
+# Final accuracy of the training set data predicting its own classe.
+# It reached 100%, through blending models together. 
+# This isn't too much of a surprise since it was highly accurate predicting training->test-validation (97.6%), so just predicting its own values should be even more accurate..
+
+gbmFitCFFINALAll<- confusionMatrix(predDFFINAL$classe, predict(rfFitFINALAll, predDFFINAL))
+gbmFitCFFINALAll
+```
+
+```{r cache=TRUE}
+pred5FINAL<- predict(rfFitFINAL, testPredPCAFINAL, type = "prob")
+pred6FINAL<- predict(rfFitFINAL1, testPredPCAFINAL, type = "prob")
+#This uses no-PCA test set
+pred7FINAL<- predict(rfFitCFnoPCAFINAL, testPredFINAL, type = "prob")
+pred8FINAL<- predict(gbmFitFINAL1, testPredPCAFINAL, type = "prob")
+predDFTESTFINAL<- data.frame(pred5FINAL, pred6FINAL, pred7FINAL, pred8FINAL)
+```
+
+```{r cache=TRUE}
+predDFTESTFINAL$problem_id<- testing$problem_id
+predDFTESTFINAL$FinalPrediction<- predict(rfFitFINALAll, predDFTESTFINAL)
+predDFTESTFINAL
+```
+
+## Final model accuracy
+
+The Final Predictions are all correct when compared to submission feedback so we can get accuracy feedback of each individual model in addition to the final model.
+
+```{r cache=TRUE}
+## RF default options on PCA processed data.
+
+confusionMatrix(predDFTESTFINAL$FinalPrediction, predict(rfFitFINAL, testPredPCAFINAL))
+
+
+## RF repeated cross-validation 10 folds, 3 repeats on PCA processed data.
+
+confusionMatrix(predDFTESTFINAL$FinalPrediction, predict(rfFitFINAL1, testPredPCAFINAL))
+
+## RF default options on Box-Cox transformed, scaled, and centered data but no PCA transformation.
+
+confusionMatrix(predDFTESTFINAL$FinalPrediction, predict(rfFitCFnoPCAFINAL, testPredFINAL))
+
+## GBM model on PCA processed data.
+
+confusionMatrix(predDFTESTFINAL$FinalPrediction, predict(gbmFitFINAL1, testPredPCAFINAL))
+
+## Final blended model accuracy.
+
+confusionMatrix(predDFTESTFINAL$FinalPrediction, predict(rfFitFINALAll, predDFTESTFINAL))
+
+## Final Model Diagnostics
+
+rfFitFINALAll$finalModel
+
+```
+
